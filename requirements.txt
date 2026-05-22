@@ -1,0 +1,16 @@
+# Server
+flask>=3.0.0
+
+# Cryptography
+cryptography>=42.0.0
+argon2-cffi>=23.1.0
+
+# GUI
+customtkinter>=5.2.0
+
+# QR Code (bonus)
+qrcode[pil]>=7.4.2
+Pillow>=10.0.0
+
+# HTTP client
+requests>=2.31.0

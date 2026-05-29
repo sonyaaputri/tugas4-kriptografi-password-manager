@@ -1,16 +1,21 @@
-# Server
+# ============================================================
+# Dependensi Password Manager Terdistribusi
+# Tugas 4 II4021 Kriptografi
+# ============================================================
+
+# Server (Flask REST API)
 flask>=3.0.0
 
-# Cryptography
-cryptography>=42.0.0
-argon2-cffi>=23.1.0
+# Kriptografi
+cryptography>=42.0.0      # AES-128-GCM (vault & local share)
+argon2-cffi>=23.1.0       # Argon2id KDF untuk derivasi kunci dari master password
 
-# GUI
-customtkinter>=5.2.0
+# GUI Klien
+customtkinter>=5.2.0      # GUI modern berbasis tkinter
 
-# QR Code (bonus)
+# QR Code (bonus: kriptografi visual untuk recovery share)
 qrcode[pil]>=7.4.2
 Pillow>=10.0.0
 
-# HTTP client
+# HTTP Client (komunikasi klien ke server)
 requests>=2.31.0

@@ -72,7 +72,8 @@ def register():
     if not success:
         return error(f"Username '{username}' sudah terdaftar", 409)
 
-    return ok(message=f"Pengguna '{username}' berhasil didaftarkan"), 201
+    from flask import jsonify as _jsonify
+    return _jsonify({"success": True, "message": f"Pengguna '{username}' berhasil didaftarkan"}), 201
 
 
 # ── Endpoint: Get Server Data (Mode Normal) ───────────────────

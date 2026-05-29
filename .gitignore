@@ -216,3 +216,12 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Data lokal sensitif pengguna
+client/local_data.json
+
+# Database SQLite server (runtime)
+server/*.db
+
+# File test sementara
+tests/_test_local_data.json

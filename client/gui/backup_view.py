@@ -1,7 +1,3 @@
-# ============================================================
-# Tampilan mode backup (server tidak aktif)
-# ============================================================
-
 import customtkinter as ctk
 import json
 import threading
@@ -64,7 +60,7 @@ class BackupView(ctk.CTkFrame):
 
         ctk.CTkLabel(
             container,
-            text="Server tidak aktif. Masuk menggunakan recovery share (hanya baca).",
+            text="Server tidak aktif. Masuk menggunakan recovery share.",
             font=ctk.CTkFont(size=13),
             text_color=COLORS["text_secondary"],
             wraplength=360,
@@ -73,7 +69,7 @@ class BackupView(ctk.CTkFrame):
 
         # Form
         ctk.CTkLabel(
-            container, text="Master Password",
+            container, text="Password",
             font=ctk.CTkFont(size=13),
             text_color=COLORS["text_secondary"],
             anchor="w",
@@ -81,7 +77,7 @@ class BackupView(ctk.CTkFrame):
 
         self._pass_entry = ctk.CTkEntry(
             container,
-            placeholder_text="Masukkan master password",
+            placeholder_text="Masukkan password",
             show="*",
             fg_color=COLORS["bg_input"],
             border_color=COLORS["border"],
@@ -142,7 +138,7 @@ class BackupView(ctk.CTkFrame):
         # Tombol
         self._open_btn = ctk.CTkButton(
             container,
-            text="Buka Vault (Hanya Baca)",
+            text="Buka Vault",
             font=ctk.CTkFont(size=14, weight="bold"),
             fg_color=COLORS["accent"],
             hover_color=COLORS["accent_hover"],
@@ -198,7 +194,7 @@ class BackupView(ctk.CTkFrame):
         threading.Thread(target=worker, daemon=True).start()
 
     def _on_done(self, vault, password):
-        self._open_btn.configure(text="Buka Vault (Hanya Baca)", state="normal")
+        self._open_btn.configure(text="Buka Vault", state="normal")
         if vault is None:
             self._set_status(
                 "Gagal membuka vault. Periksa master password dan recovery share."

@@ -56,16 +56,9 @@ class LoginView(ctk.CTkFrame):
             text=title_text,
             font=ctk.CTkFont(size=26, weight="bold"),
             text_color=COLORS["text_primary"],
-        ).grid(row=0, column=0, padx=40, pady=(36, 4))
+        ).grid(row=0, column=0, padx=40, pady=(36, 16))
 
-        ctk.CTkLabel(
-            container,
-            text="Simpan kata sandi dengan enkripsi AES-128-GCM",
-            font=ctk.CTkFont(size=13),
-            text_color=COLORS["text_secondary"],
-        ).grid(row=1, column=0, padx=40, pady=(0, 28))
-
-        # Tab: Login / Daftar
+        # Tab: Masuk / Daftar (selalu tampilkan keduanya)
         self._tab_view = ctk.CTkTabview(
             container,
             width=360,
@@ -77,29 +70,28 @@ class LoginView(ctk.CTkFrame):
             segmented_button_unselected_hover_color=COLORS["border"],
             text_color=COLORS["text_primary"],
         )
-        self._tab_view.grid(row=2, column=0, padx=24, pady=(0, 8))
+        self._tab_view.grid(row=1, column=0, padx=24, pady=(0, 8))
 
-        if self._has_local:
-            self._tab_view.add("Masuk")
-            self._build_login_tab(self._tab_view.tab("Masuk"))
-        else:
-            self._tab_view.add("Daftar")
-            self._build_register_tab(self._tab_view.tab("Daftar"))
+        self._tab_view.add("Masuk")
+        self._build_login_tab(self._tab_view.tab("Masuk"))
+        self._tab_view.add("Daftar")
+        self._build_register_tab(self._tab_view.tab("Daftar"))
 
-        # Tombol mode backup (hanya jika ada data lokal)
-        if self._has_local:
-            ctk.CTkButton(
-                container,
-                text="Masuk dengan Mode Backup",
-                font=ctk.CTkFont(size=12),
-                fg_color="transparent",
-                text_color=COLORS["text_secondary"],
-                hover_color=COLORS["bg_input"],
-                height=30,
-                command=self._go_backup,
-            ).grid(row=3, column=0, padx=40, pady=(0, 20))
-        else:
-            ctk.CTkFrame(container, height=20, fg_color="transparent").grid(row=3, column=0)
+        # Arahkan ke tab yang sesuai
+        if not self._has_local:
+            self._tab_view.set("Daftar")
+
+        # Tombol mode backup
+        ctk.CTkButton(
+            container,
+            text="Masuk dengan Mode Backup",
+            font=ctk.CTkFont(size=12),
+            fg_color="transparent",
+            text_color=COLORS["text_secondary"],
+            hover_color=COLORS["bg_input"],
+            height=30,
+            command=self._go_backup,
+        ).grid(row=2, column=0, padx=40, pady=(0, 8))
 
         # Label status
         self._status_label = ctk.CTkLabel(
@@ -109,7 +101,7 @@ class LoginView(ctk.CTkFrame):
             text_color=COLORS["danger"],
             wraplength=340,
         )
-        self._status_label.grid(row=4, column=0, padx=24, pady=(0, 20))
+        self._status_label.grid(row=3, column=0, padx=24, pady=(0, 20))
 
     def _build_login_tab(self, parent):
         """Form login normal."""
@@ -139,7 +131,7 @@ class LoginView(ctk.CTkFrame):
             self._login_user_entry.insert(0, username)
 
         ctk.CTkLabel(
-            parent, text="Master Password",
+            parent, text="Password",
             font=ctk.CTkFont(size=13),
             text_color=COLORS["text_secondary"],
             anchor="w",
@@ -147,7 +139,7 @@ class LoginView(ctk.CTkFrame):
 
         self._login_pass_entry = ctk.CTkEntry(
             parent,
-            placeholder_text="Masukkan master password",
+            placeholder_text="Masukkan password",
             show="*",
             fg_color=COLORS["bg_input"],
             border_color=COLORS["border"],
@@ -203,7 +195,7 @@ class LoginView(ctk.CTkFrame):
 
         self._reg_pass_entry = ctk.CTkEntry(
             parent,
-            placeholder_text="Buat master password kuat",
+            placeholder_text="Masukkan password",
             show="*",
             fg_color=COLORS["bg_input"],
             border_color=COLORS["border"],
@@ -223,7 +215,7 @@ class LoginView(ctk.CTkFrame):
 
         self._reg_confirm_entry = ctk.CTkEntry(
             parent,
-            placeholder_text="Ulangi master password",
+            placeholder_text="Ulangi password",
             show="*",
             fg_color=COLORS["bg_input"],
             border_color=COLORS["border"],

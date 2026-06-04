@@ -10,12 +10,11 @@ flask>=3.0.0
 cryptography>=42.0.0      # AES-128-GCM (vault & local share)
 argon2-cffi>=23.1.0       # Argon2id KDF untuk derivasi kunci dari master password
 
-# GUI Klien
-customtkinter>=5.2.0      # GUI modern berbasis tkinter
-
 # QR Code (bonus: kriptografi visual untuk recovery share)
 qrcode[pil]>=7.4.2
 Pillow>=10.0.0
 
 # HTTP Client (komunikasi klien ke server)
 requests>=2.31.0
+
+# Client CLI menggunakan standard library Python (getpass, os, json, dll.)

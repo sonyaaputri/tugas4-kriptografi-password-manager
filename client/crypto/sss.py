@@ -17,9 +17,9 @@ from typing import List, Dict
 
 # Konstanta
 
-# Bilangan prima besar (safe prime 256-bit) untuk GF(p).
+# Bilangan prima besar 256-bit untuk GF(p).
 # Harus lebih besar dari nilai maksimum secret (256-bit / 32 bytes).
-# Nilai ini adalah bilangan prima aman: p = 2q+1 dengan q juga prima.
+# Nilai ini umum dipakai sebagai modulus field secp256k1.
 _PRIME = (
     0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F
 )

@@ -68,6 +68,55 @@ _WHITE_PATTERNS = [
 # Ukuran blok tiap pixel QR dalam gambar share (2×2 subpixel)
 _BLOCK_SIZE = 2
 
+# Ukuran tampil share dan QR akhir agar hasil gabungan tetap mudah dipindai.
+_QR_DISPLAY_SCALE = 8
+_SHARE_DISPLAY_SCALE = 4
+_RECONSTRUCTION_BLOCK_SIZE = _BLOCK_SIZE * _SHARE_DISPLAY_SCALE
+
+
+def _resize_nearest(image: "Image.Image", scale: int) -> "Image.Image":
+    """Resize image with nearest-neighbor scaling."""
+    if scale <= 1:
+        return image.copy()
+    return image.resize(
+        (image.width * scale, image.height * scale),
+        Image.NEAREST,
+    )
+
+
+def _threshold_overlay_to_qr(combined: "Image.Image") -> "Image.Image":
+    """Collapse the VSS overlay back to a clean QR module grid."""
+    block_size = None
+    for candidate in (_RECONSTRUCTION_BLOCK_SIZE, _BLOCK_SIZE):
+        if combined.width % candidate == 0 and combined.height % candidate == 0:
+            block_size = candidate
+            break
+
+    if block_size is None:
+        raise ValueError(
+            f"Ukuran share tidak cocok untuk rekonstruksi: {combined.size}"
+        )
+
+    qr_width = combined.width // block_size
+    qr_height = combined.height // block_size
+    qr_modules = Image.new("1", (qr_width, qr_height), color=1)
+    src_px = combined.load()
+    dst_px = qr_modules.load()
+    black_threshold = (block_size * block_size) // 2
+
+    for y in range(qr_height):
+        for x in range(qr_width):
+            black_pixels = 0
+            x0 = x * block_size
+            y0 = y * block_size
+            for yy in range(y0, y0 + block_size):
+                for xx in range(x0, x0 + block_size):
+                    if src_px[xx, yy] == 0:
+                        black_pixels += 1
+            dst_px[x, y] = 0 if black_pixels > black_threshold else 1
+
+    return _resize_nearest(qr_modules, _QR_DISPLAY_SCALE)
+
 
 # Pembuatan QR Code
 
@@ -201,18 +250,10 @@ def combine_shares(
     share2: "Image.Image"
 ) -> "Image.Image":
     """
-    Menggabungkan dua share VSS untuk menghasilkan QR code kembali.
+    Menggabungkan dua share VSS dan mengembalikan QR code yang bersih.
 
-    Operasi: pixel_result = pixel_share1 AND pixel_share2
-    (dalam mode "1": 0 AND 0 = 0 = hitam; semua lainnya = terang)
-
-    Pixel hitam muncul ketika KEDUA share memiliki pixel hitam di posisi
-    yang sama → terjadi untuk pixel QR yang hitam (pola komplemen
-    menghasilkan setidaknya 2 pixel hitam per blok di posisi berbeda,
-    tapi overlay OR/AND menunjukkan informasi).
-
-    Catatan: hasil overlay lebih gelap dari QR asli (kontras lebih rendah
-    karena pixel putih asli menjadi 50% abu-abu), tapi tetap bisa dipindai.
+    Hasil akhir bukan overlay grayscale mentah, tetapi QR module grid yang
+    sudah dipulihkan lalu diperbesar lagi agar mudah dipindai.
 
     Parameters
     ----------
@@ -221,7 +262,7 @@ def combine_shares(
 
     Returns
     -------
-    PIL.Image.Image : QR code hasil rekonstruksi (mode "L" grayscale)
+    PIL.Image.Image : QR code hasil rekonstruksi (mode "1" binary)
 
     Raises
     ------
@@ -236,14 +277,12 @@ def combine_shares(
             f"Ukuran share berbeda: {share1.size} vs {share2.size}"
         )
 
-    # Konversi ke grayscale untuk operasi pixel
-    s1 = share1.convert("L")
-    s2 = share2.convert("L")
+    # Konversi ke binary untuk operasi pixel
+    s1 = share1.convert("1")
+    s2 = share2.convert("1")
 
-    # Overlay: multiply (AND secara visual)
-    # pixel putih (255) × pixel putih (255) / 255 = 255 (putih)
-    # pixel hitam (0)   × apapun           / 255 = 0   (hitam)
-    combined = Image.new("L", share1.size)
+    # Overlay: pixel hitam muncul jika salah satu share hitam di posisi itu.
+    combined = Image.new("1", share1.size, color=1)
     s1_px = s1.load()
     s2_px = s2.load()
     c_px  = combined.load()
@@ -251,13 +290,12 @@ def combine_shares(
     width, height = share1.size
     for y in range(height):
         for x in range(width):
-            # AND operasi: hitam (0) jika salah satu atau keduanya hitam
             if s1_px[x, y] == 0 or s2_px[x, y] == 0:
-                c_px[x, y] = 0    # hitam
+                c_px[x, y] = 0
             else:
-                c_px[x, y] = 255  # putih
+                c_px[x, y] = 1
 
-    return combined
+    return _threshold_overlay_to_qr(combined)
 
 
 # API Publik
@@ -298,22 +336,13 @@ def create_visual_shares(
     # 1. Buat QR code
     qr_image = recovery_share_to_qr(recovery_share_str)
     # Scale up QR untuk visibilitas (tiap modul = 8 pixel)
-    qr_display = qr_image.resize(
-        (qr_image.width * 8, qr_image.height * 8),
-        Image.NEAREST
-    )
+    qr_display = _resize_nearest(qr_image, _QR_DISPLAY_SCALE)
 
     # 2. Bagi menjadi 2 share
     share1, share2 = split_qr_to_shares(qr_image)
     # Scale up share untuk visibilitas
-    share1_display = share1.resize(
-        (share1.width * 4, share1.height * 4),
-        Image.NEAREST
-    )
-    share2_display = share2.resize(
-        (share2.width * 4, share2.height * 4),
-        Image.NEAREST
-    )
+    share1_display = _resize_nearest(share1, _SHARE_DISPLAY_SCALE)
+    share2_display = _resize_nearest(share2, _SHARE_DISPLAY_SCALE)
 
     # 3. Simpan gambar
     os.makedirs(output_dir, exist_ok=True)
@@ -348,7 +377,7 @@ def reconstruct_and_verify(
 
     Returns
     -------
-    str : path ke gambar QR code hasil rekonstruksi
+    str : path ke gambar QR code hasil rekonstruksi yang sudah scanable
     """
     if not _VSS_AVAILABLE:
         raise RuntimeError("Library Pillow diperlukan.")

@@ -25,9 +25,13 @@ def init_db() -> None:
     schema_path = os.path.join(
         os.path.dirname(os.path.abspath(__file__)), "schema.sql"
     )
-    with get_connection() as conn:
-        with open(schema_path, "r") as f:
-            conn.executescript(f.read())
+    conn = get_connection()
+    try:
+        with conn:
+            with open(schema_path, "r") as f:
+                conn.executescript(f.read())
+    finally:
+        conn.close()
     print(f"[DB] Database siap di: {DB_PATH}")
 
 
@@ -35,10 +39,13 @@ def init_db() -> None:
 
 def user_exists(username: str) -> bool:
     """Cek apakah username sudah terdaftar."""
-    with get_connection() as conn:
+    conn = get_connection()
+    try:
         row = conn.execute(
             "SELECT 1 FROM users WHERE username = ?", (username,)
         ).fetchone()
+    finally:
+        conn.close()
     return row is not None
 
 
@@ -75,14 +82,18 @@ def create_user(
     """
     if user_exists(username):
         return False
-    with get_connection() as conn:
-        conn.execute(
-            """
-            INSERT INTO users (username, server_share, vault_blob, vault_nonce)
-            VALUES (?, ?, ?, ?)
-            """,
-            (username, server_share, vault_blob, vault_nonce),
-        )
+    conn = get_connection()
+    try:
+        with conn:
+            conn.execute(
+                """
+                INSERT INTO users (username, server_share, vault_blob, vault_nonce)
+                VALUES (?, ?, ?, ?)
+                """,
+                (username, server_share, vault_blob, vault_nonce),
+            )
+    finally:
+        conn.close()
     return True
 
 
@@ -96,10 +107,13 @@ def get_user(username: str) -> dict | None:
     created_at, updated_at.
     None jika pengguna tidak ditemukan.
     """
-    with get_connection() as conn:
+    conn = get_connection()
+    try:
         row = conn.execute(
             "SELECT * FROM users WHERE username = ?", (username,)
         ).fetchone()
+    finally:
+        conn.close()
     return dict(row) if row else None
 
 
@@ -124,17 +138,21 @@ def update_vault(
     -------
     True jika berhasil, False jika username tidak ditemukan.
     """
-    with get_connection() as conn:
-        cursor = conn.execute(
-            """
-            UPDATE users
-            SET vault_blob  = ?,
-                vault_nonce = ?,
-                updated_at  = datetime('now')
-            WHERE username = ?
-            """,
-            (vault_blob, vault_nonce, username),
-        )
+    conn = get_connection()
+    try:
+        with conn:
+            cursor = conn.execute(
+                """
+                UPDATE users
+                SET vault_blob  = ?,
+                    vault_nonce = ?,
+                    updated_at  = datetime('now')
+                WHERE username = ?
+                """,
+                (vault_blob, vault_nonce, username),
+            )
+    finally:
+        conn.close()
     return cursor.rowcount > 0
 
 
@@ -146,7 +164,8 @@ def get_server_data(username: str) -> dict | None:
     Ini adalah satu-satunya data yang keluar dari server ke klien.
     Server tidak pernah mengirim master key atau data sensitif lain.
     """
-    with get_connection() as conn:
+    conn = get_connection()
+    try:
         row = conn.execute(
             """
             SELECT server_share, vault_blob, vault_nonce
@@ -155,4 +174,6 @@ def get_server_data(username: str) -> dict | None:
             """,
             (username,),
         ).fetchone()
+    finally:
+        conn.close()
     return dict(row) if row else None

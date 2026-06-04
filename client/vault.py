@@ -128,19 +128,10 @@ def create_vault(username: str, master_password: str) -> dict | None:
         local_share_bytes, kdf_key
     )
 
-    # 6. Simpan local share terenkripsi + KDF params ke file lokal
-    storage.save_local_share(
-        username          = username,
-        enc_local_share   = enc_local_share,
-        local_share_nonce = local_share_nonce,
-        kdf_salt          = kdf_salt,
-        kdf_params        = kdf_params,
-    )
-
-    # 7. Simpan backup vault lokal (sinkron dengan vault di server)
-    storage.save_backup_vault(vault_blob, vault_nonce)
-
-    # 8. Kirim server share + vault terenkripsi ke server
+    # 6. Kirim server share + vault terenkripsi ke server.
+    # Data lokal baru disimpan setelah registrasi server sukses agar
+    # kegagalan username/HTTP tidak meninggalkan local share yang tidak
+    # cocok dengan data server.
     success, message = api.register_user(
         username     = username,
         server_share = server_share,
@@ -151,6 +142,18 @@ def create_vault(username: str, master_password: str) -> dict | None:
     if not success:
         print(f"[VAULT] Gagal register ke server: {message}")
         return None
+
+    # 7. Simpan local share terenkripsi + KDF params ke file lokal
+    storage.save_local_share(
+        username          = username,
+        enc_local_share   = enc_local_share,
+        local_share_nonce = local_share_nonce,
+        kdf_salt          = kdf_salt,
+        kdf_params        = kdf_params,
+    )
+
+    # 8. Simpan backup vault lokal (sinkron dengan vault di server)
+    storage.save_backup_vault(vault_blob, vault_nonce)
 
     # Master key dihapus dari memori setelah selesai
     del master_key

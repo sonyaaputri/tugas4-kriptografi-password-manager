@@ -1,6 +1,7 @@
 import base64
 import json
 import os
+import shutil
 import secrets
 import sqlite3
 import sys
@@ -27,13 +28,18 @@ from crypto.sss import share_to_string, string_to_share
 
 
 _TEST_DATA_PATH = os.path.join(os.path.dirname(__file__), "_assignment_local_data.json")
+_TEST_USERS_DIR = os.path.join(os.path.dirname(__file__), "_assignment_local_users")
 storage.LOCAL_DATA_PATH = _TEST_DATA_PATH
+storage.LOCAL_USERS_DIR = _TEST_USERS_DIR
 
 
 def _clear_local_data():
     storage.LOCAL_DATA_PATH = _TEST_DATA_PATH
+    storage.LOCAL_USERS_DIR = _TEST_USERS_DIR
     if os.path.exists(_TEST_DATA_PATH):
         os.remove(_TEST_DATA_PATH)
+    if os.path.isdir(_TEST_USERS_DIR):
+        shutil.rmtree(_TEST_USERS_DIR)
 
 
 def _make_mock_server():
@@ -81,8 +87,8 @@ class VaultRequirementTestCase(unittest.TestCase):
             patcher.stop()
         _clear_local_data()
 
-    def decrypt_local_share(self, master_password):
-        enc_local_share, nonce, salt, params = storage.load_local_share()
+    def decrypt_local_share(self, username, master_password):
+        enc_local_share, nonce, salt, params = storage.load_local_share(username)
         kdf_key, _, _ = derive_key(master_password, salt, params)
         plaintext = decrypt_local_share(enc_local_share, nonce, kdf_key)
         return json.loads(plaintext.decode("utf-8"))
@@ -98,7 +104,7 @@ class TestRequirement01CreateVault(VaultRequirementTestCase):
         parsed_recovery = string_to_share(recovery_text)
         self.assertEqual(parsed_recovery, recovery)
 
-        local_share = self.decrypt_local_share("MasterPass123!")
+        local_share = self.decrypt_local_share("req_create", "MasterPass123!")
         server_share = self.server_db["req_create"]["server_share"]
 
         self.assertEqual(local_share["index"], 1)
@@ -112,16 +118,16 @@ class TestRequirement01CreateVault(VaultRequirementTestCase):
 class TestRequirement02LocalShareProtection(VaultRequirementTestCase):
     def test_local_share_is_encrypted_and_password_protected(self):
         recovery = vault_logic.create_vault("req_local", "MasterPass123!")
-        local_share = self.decrypt_local_share("MasterPass123!")
+        local_share = self.decrypt_local_share("req_local", "MasterPass123!")
 
-        with open(_TEST_DATA_PATH, "r") as file:
+        with open(storage.get_local_data_path("req_local"), "r") as file:
             local_file_text = file.read()
 
         self.assertNotIn(local_share["value"], local_file_text)
         self.assertNotIn(recovery["value"], local_file_text)
         self.assertEqual(local_share["index"], 1)
 
-        enc_local_share, nonce, salt, params = storage.load_local_share()
+        enc_local_share, nonce, salt, params = storage.load_local_share("req_local")
         wrong_key, _, _ = derive_key("WrongPass123!", salt, params)
         with self.assertRaises(Exception):
             decrypt_local_share(enc_local_share, nonce, wrong_key)
@@ -131,8 +137,8 @@ class TestRequirement03NormalAccess(VaultRequirementTestCase):
     def test_normal_access_uses_local_and_server_share(self):
         vault_logic.create_vault("req_normal", "MasterPass123!")
 
-        vault = vault_logic.open_vault_normal("MasterPass123!")
-        wrong = vault_logic.open_vault_normal("WrongPass123!")
+        vault = vault_logic.open_vault_normal("req_normal", "MasterPass123!")
+        wrong = vault_logic.open_vault_normal("req_normal", "WrongPass123!")
 
         self.assertEqual(vault, [])
         self.assertIsNone(wrong)
@@ -141,11 +147,12 @@ class TestRequirement03NormalAccess(VaultRequirementTestCase):
 class TestRequirement04AddPassword(VaultRequirementTestCase):
     def test_add_manual_and_generated_password_updates_server_and_backup(self):
         vault_logic.create_vault("req_add", "MasterPass123!")
-        vault = vault_logic.open_vault_normal("MasterPass123!")
+        vault = vault_logic.open_vault_normal("req_add", "MasterPass123!")
         old_nonce = self.server_db["req_add"]["vault_nonce"]
-        old_backup = storage.load_backup_vault()
+        old_backup = storage.load_backup_vault("req_add")
 
         vault = vault_logic.add_entry(
+            "req_add",
             vault,
             "MasterPass123!",
             "GitHub",
@@ -155,6 +162,7 @@ class TestRequirement04AddPassword(VaultRequirementTestCase):
         )
         generated = generate_password(18)
         vault = vault_logic.add_entry(
+            "req_add",
             vault,
             "MasterPass123!",
             "GitLab",
@@ -163,7 +171,7 @@ class TestRequirement04AddPassword(VaultRequirementTestCase):
             "generated",
         )
 
-        new_backup = storage.load_backup_vault()
+        new_backup = storage.load_backup_vault("req_add")
         self.assertEqual(len(vault), 2)
         self.assertEqual(len(generated), 18)
         self.assertNotEqual(old_nonce, self.server_db["req_add"]["vault_nonce"])
@@ -173,13 +181,13 @@ class TestRequirement04AddPassword(VaultRequirementTestCase):
 class TestRequirement05EditDeleteAndBackupReadOnly(VaultRequirementTestCase):
     def test_edit_delete_and_cli_disables_mutation_in_backup_mode(self):
         vault_logic.create_vault("req_edit_delete", "MasterPass123!")
-        vault = vault_logic.open_vault_normal("MasterPass123!")
-        vault = vault_logic.add_entry(vault, "MasterPass123!", "A", "a@a.com", "old", "")
-        vault = vault_logic.edit_entry(vault, "MasterPass123!", 0, password="new")
+        vault = vault_logic.open_vault_normal("req_edit_delete", "MasterPass123!")
+        vault = vault_logic.add_entry("req_edit_delete", vault, "MasterPass123!", "A", "a@a.com", "old", "")
+        vault = vault_logic.edit_entry("req_edit_delete", vault, "MasterPass123!", 0, password="new")
         self.assertEqual(vault[0]["password"], "new")
 
-        vault = vault_logic.delete_entry(vault, "MasterPass123!", 0)
-        reopened = vault_logic.open_vault_normal("MasterPass123!")
+        vault = vault_logic.delete_entry("req_edit_delete", vault, "MasterPass123!", 0)
+        reopened = vault_logic.open_vault_normal("req_edit_delete", "MasterPass123!")
         self.assertEqual(vault, [])
         self.assertEqual(reopened, [])
 
@@ -237,11 +245,11 @@ class TestRequirement06ServerStorage(unittest.TestCase):
 class TestRequirement07BackupMode(VaultRequirementTestCase):
     def test_backup_mode_reads_local_backup_without_server(self):
         recovery = vault_logic.create_vault("req_backup", "MasterPass123!")
-        vault = vault_logic.open_vault_normal("MasterPass123!")
-        vault_logic.add_entry(vault, "MasterPass123!", "Mail", "m@example.com", "pw", "")
+        vault = vault_logic.open_vault_normal("req_backup", "MasterPass123!")
+        vault_logic.add_entry("req_backup", vault, "MasterPass123!", "Mail", "m@example.com", "pw", "")
 
         with patch("vault.api.fetch_server_data", return_value=(False, {})):
-            backup_vault = vault_logic.open_vault_backup("MasterPass123!", recovery)
+            backup_vault = vault_logic.open_vault_backup("req_backup", "MasterPass123!", recovery)
 
         self.assertIsNotNone(backup_vault)
         self.assertEqual(backup_vault[0]["nama_layanan"], "Mail")
@@ -255,17 +263,18 @@ class TestRequirement08RecoveryFailures(VaultRequirementTestCase):
             "value": secrets.token_hex(len(recovery["value"]) // 2),
         }
 
-        self.assertIsNone(vault_logic.open_vault_backup("MasterPass123!", wrong_share))
+        self.assertIsNone(vault_logic.open_vault_backup("req_fail", "MasterPass123!", wrong_share))
 
-        with open(_TEST_DATA_PATH, "r") as file:
+        local_path = storage.get_local_data_path("req_fail")
+        with open(local_path, "r") as file:
             local_data = json.load(file)
         blob = bytearray(base64.b64decode(local_data["enc_backup_vault"]))
         blob[0] ^= 0x01
         local_data["enc_backup_vault"] = base64.b64encode(bytes(blob)).decode()
-        with open(_TEST_DATA_PATH, "w") as file:
+        with open(local_path, "w") as file:
             json.dump(local_data, file)
 
-        self.assertIsNone(vault_logic.open_vault_backup("MasterPass123!", recovery))
+        self.assertIsNone(vault_logic.open_vault_backup("req_fail", "MasterPass123!", recovery))
 
 
 class TestRequirement09VisualCryptographyBonus(unittest.TestCase):

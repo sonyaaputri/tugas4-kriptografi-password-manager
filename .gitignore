@@ -219,9 +219,14 @@ __marimo__/
 
 # Data lokal sensitif pengguna
 client/local_data.json
+client/local_users/
+client/recovery_artifacts/
 
 # Database SQLite server (runtime)
 server/*.db
 
 # File test sementara
 tests/_test_local_data.json
+tests/_test_local_users/
+tests/_assignment_local_data.json
+tests/_assignment_local_users/

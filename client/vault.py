@@ -102,6 +102,8 @@ def create_vault(username: str, master_password: str) -> dict | None:
     - Server tidak pernah menerima master key, local share, recovery share
     """
 
+    username = username.strip()
+
     # 1. Generate master key acak 128-bit menggunakan CSPRNG (os.urandom)
     master_key = secrets.token_bytes(MASTER_KEY_SIZE)
 
@@ -153,7 +155,7 @@ def create_vault(username: str, master_password: str) -> dict | None:
     )
 
     # 8. Simpan backup vault lokal (sinkron dengan vault di server)
-    storage.save_backup_vault(vault_blob, vault_nonce)
+    storage.save_backup_vault(username, vault_blob, vault_nonce)
 
     # Master key dihapus dari memori setelah selesai
     del master_key
@@ -165,7 +167,7 @@ def create_vault(username: str, master_password: str) -> dict | None:
 
 # ── Akses Normal ──────────────────────────────────────────────
 
-def open_vault_normal(master_password: str) -> list[dict] | None:
+def open_vault_normal(username: str, master_password: str) -> list[dict] | None:
     """
     Membuka vault pada mode normal (server aktif).
 
@@ -179,6 +181,7 @@ def open_vault_normal(master_password: str) -> list[dict] | None:
 
     Parameters
     ----------
+    username        : nama pengguna vault yang akan dibuka
     master_password : password utama pengguna
 
     Returns
@@ -188,7 +191,8 @@ def open_vault_normal(master_password: str) -> list[dict] | None:
     """
 
     # 1. Baca data lokal
-    local_data = storage.load_local_share()
+    username = username.strip()
+    local_data = storage.load_local_share(username)
     if not local_data:
         print("[VAULT] Data lokal tidak ditemukan. Buat vault terlebih dahulu.")
         return None
@@ -211,9 +215,7 @@ def open_vault_normal(master_password: str) -> list[dict] | None:
         del kdf_key
 
     # 4. Ambil server share + vault dari server
-    success, server_data = api.fetch_server_data(
-        storage.get_username()
-    )
+    success, server_data = api.fetch_server_data(username)
     if not success:
         print("[VAULT] Gagal mengambil data dari server.")
         return None
@@ -245,6 +247,7 @@ def open_vault_normal(master_password: str) -> list[dict] | None:
 # ── Akses Backup ──────────────────────────────────────────────
 
 def open_vault_backup(
+    username: str,
     master_password: str,
     recovery_share: dict
 ) -> list[dict] | None:
@@ -262,6 +265,7 @@ def open_vault_backup(
 
     Parameters
     ----------
+    username        : nama pengguna vault yang akan dibuka
     master_password : password utama pengguna
     recovery_share  : share ke-3 yang disimpan pengguna, format dict:
                       {"index": 3, "value": "hex string"}
@@ -273,7 +277,8 @@ def open_vault_backup(
     """
 
     # 1. Baca data lokal
-    local_data = storage.load_local_share()
+    username = username.strip()
+    local_data = storage.load_local_share(username)
     if not local_data:
         print("[VAULT] Data lokal tidak ditemukan.")
         return None
@@ -296,7 +301,7 @@ def open_vault_backup(
         del kdf_key
 
     # 4. Baca backup vault lokal
-    backup_data = storage.load_backup_vault()
+    backup_data = storage.load_backup_vault(username)
     if not backup_data:
         print("[VAULT] Backup vault lokal tidak ditemukan.")
         return None
@@ -328,6 +333,7 @@ def open_vault_backup(
 # ── CRUD Data Password (Mode Normal) ─────────────────────────
 
 def _save_vault(
+    username: str,
     vault: list[dict],
     master_password: str
 ) -> bool:
@@ -343,6 +349,7 @@ def _save_vault(
 
     Parameters
     ----------
+    vault_username  : nama pengguna pemilik vault
     vault           : list of dict isi vault (plaintext)
     master_password : password utama pengguna
 
@@ -356,7 +363,8 @@ def _save_vault(
     """
 
     # Ambil local share untuk rekonstruksi master key
-    local_data = storage.load_local_share()
+    username = username.strip()
+    local_data = storage.load_local_share(username)
     if not local_data:
         return False
 
@@ -374,7 +382,7 @@ def _save_vault(
         del kdf_key
 
     # Ambil server share
-    success, server_data = api.fetch_server_data(storage.get_username())
+    success, server_data = api.fetch_server_data(username)
     if not success:
         return False
 
@@ -394,20 +402,19 @@ def _save_vault(
     del master_key
 
     # Push vault baru ke server
-    ok, msg = api.push_vault(
-        storage.get_username(), vault_blob, vault_nonce_hex
-    )
+    ok, msg = api.push_vault(username, vault_blob, vault_nonce_hex)
     if not ok:
         print(f"[VAULT] Gagal push ke server: {msg}")
         return False
 
     # Update backup vault lokal
-    storage.save_backup_vault(vault_blob, vault_nonce)
+    storage.save_backup_vault(username, vault_blob, vault_nonce)
 
     return True
 
 
 def add_entry(
+    vault_username: str,
     vault: list[dict],
     master_password: str,
     nama_layanan: str,
@@ -421,6 +428,7 @@ def add_entry(
 
     Parameters
     ----------
+    vault_username  : nama pengguna pemilik vault
     vault           : list vault saat ini (hasil open_vault_normal)
     master_password : password utama pengguna
     nama_layanan    : nama layanan/website (wajib)
@@ -440,7 +448,7 @@ def add_entry(
     }
     vault.append(entry)
 
-    if not _save_vault(vault, master_password):
+    if not _save_vault(vault_username, vault, master_password):
         vault.pop()  # rollback jika gagal
         return None
 
@@ -448,6 +456,7 @@ def add_entry(
 
 
 def edit_entry(
+    vault_username: str,
     vault: list[dict],
     master_password: str,
     index: int,
@@ -462,6 +471,7 @@ def edit_entry(
 
     Parameters
     ----------
+    vault_username  : nama pengguna pemilik vault
     vault           : list vault saat ini
     master_password : password utama pengguna
     index           : index entry yang akan diubah (0-based)
@@ -490,7 +500,7 @@ def edit_entry(
     if catatan is not None:
         vault[index]["catatan"] = catatan
 
-    if not _save_vault(vault, master_password):
+    if not _save_vault(vault_username, vault, master_password):
         vault[index] = old_entry  # rollback
         return None
 
@@ -498,6 +508,7 @@ def edit_entry(
 
 
 def delete_entry(
+    vault_username: str,
     vault: list[dict],
     master_password: str,
     index: int
@@ -508,6 +519,7 @@ def delete_entry(
 
     Parameters
     ----------
+    vault_username  : nama pengguna pemilik vault
     vault           : list vault saat ini
     master_password : password utama pengguna
     index           : index entry yang akan dihapus (0-based)
@@ -523,7 +535,7 @@ def delete_entry(
     # Simpan entry yang dihapus untuk rollback jika gagal
     removed_entry = vault.pop(index)
 
-    if not _save_vault(vault, master_password):
+    if not _save_vault(vault_username, vault, master_password):
         vault.insert(index, removed_entry)  # rollback
         return None
 

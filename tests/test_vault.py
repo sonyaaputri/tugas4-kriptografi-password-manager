@@ -12,6 +12,7 @@
 import sys
 import os
 import json
+import shutil
 import secrets
 import unittest
 from unittest.mock import patch, MagicMock
@@ -22,17 +23,22 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "client", "cryp
 import vault as vault_logic
 import local_storage as storage
 
-# Agar test tidak menghapus data user asli di client/local_data.json
+# Agar test tidak menghapus data user asli di client/local_users
 _TEST_DATA_PATH = os.path.join(os.path.dirname(__file__), "_test_local_data.json")
+_TEST_USERS_DIR = os.path.join(os.path.dirname(__file__), "_test_local_users")
 storage.LOCAL_DATA_PATH = _TEST_DATA_PATH
+storage.LOCAL_USERS_DIR = _TEST_USERS_DIR
 
 
 # Helper: bersihkan data lokal setelah setiap test 
 def _clear():
     """Hapus file test sementara agar tiap test mulai bersih."""
     storage.LOCAL_DATA_PATH = _TEST_DATA_PATH  # pastikan selalu mengarah ke file test
+    storage.LOCAL_USERS_DIR = _TEST_USERS_DIR
     if os.path.exists(_TEST_DATA_PATH):
         os.remove(_TEST_DATA_PATH)
+    if os.path.isdir(_TEST_USERS_DIR):
+        shutil.rmtree(_TEST_USERS_DIR)
 
 def _make_mock_server():
     """
@@ -137,13 +143,13 @@ class TestCreateVault(unittest.TestCase):
     def test_local_data_saved_after_create(self):
         """Data lokal harus tersimpan setelah pembuatan vault."""
         vault_logic.create_vault("userF", "password123!")
-        self.assertTrue(storage.local_data_exists(),
+        self.assertTrue(storage.local_data_exists("userF"),
                         "local_data.json harus ada setelah create_vault")
 
     def test_local_share_encrypted_not_plaintext(self):
         """Local share harus disimpan dalam bentuk terenkripsi."""
         vault_logic.create_vault("userG", "password123!")
-        local_data = storage.load_local_share()
+        local_data = storage.load_local_share("userG")
         self.assertIsNotNone(local_data)
         enc_local_share, nonce, kdf_salt, kdf_params = local_data
         # enc_local_share harus bytes (terenkripsi), bukan JSON share langsung
@@ -198,18 +204,18 @@ class TestOpenVaultNormal(unittest.TestCase):
 
     def test_open_vault_normal_returns_list(self):
         """open_vault_normal mengembalikan list (vault)."""
-        vault = vault_logic.open_vault_normal(self.master_password)
+        vault = vault_logic.open_vault_normal(self.username, self.master_password)
         self.assertIsNotNone(vault)
         self.assertIsInstance(vault, list)
 
     def test_open_vault_empty_initially(self):
         """Vault baru harus kosong (list kosong)."""
-        vault = vault_logic.open_vault_normal(self.master_password)
+        vault = vault_logic.open_vault_normal(self.username, self.master_password)
         self.assertEqual(vault, [])
 
     def test_wrong_password_returns_none(self):
         """Password salah harus mengembalikan None (akses ditolak)."""
-        result = vault_logic.open_vault_normal("SalahPassword!")
+        result = vault_logic.open_vault_normal(self.username, "SalahPassword!")
         self.assertIsNone(result,
                           "Password salah seharusnya mengembalikan None")
 
@@ -218,7 +224,7 @@ class TestOpenVaultNormal(unittest.TestCase):
         Verifikasi tidak langsung: vault berhasil dibuka berarti
         local share + server share berhasil merekonstruksi master key.
         """
-        vault = vault_logic.open_vault_normal(self.master_password)
+        vault = vault_logic.open_vault_normal(self.username, self.master_password)
         # Jika vault tidak None, rekonstruksi berhasil
         self.assertIsNotNone(vault)
 
@@ -248,13 +254,13 @@ class TestOpenVaultBackup(unittest.TestCase):
 
     def test_open_backup_with_correct_recovery_share(self):
         """Membuka vault backup dengan recovery share yang benar harus berhasil."""
-        vault = vault_logic.open_vault_backup(self.master_password, self.recovery_share)
+        vault = vault_logic.open_vault_backup(self.username, self.master_password, self.recovery_share)
         self.assertIsNotNone(vault, "Backup vault seharusnya berhasil dibuka")
         self.assertIsInstance(vault, list)
 
     def test_open_backup_wrong_password_returns_none(self):
         """Password salah pada mode backup harus mengembalikan None."""
-        result = vault_logic.open_vault_backup("SalahPass!", self.recovery_share)
+        result = vault_logic.open_vault_backup(self.username, "SalahPass!", self.recovery_share)
         self.assertIsNone(result)
 
     def test_open_backup_wrong_recovery_share_returns_none(self):
@@ -263,18 +269,18 @@ class TestOpenVaultBackup(unittest.TestCase):
             "index": 3,
             "value": secrets.token_hex(len(self.recovery_share["value"]) // 2)
         }
-        result = vault_logic.open_vault_backup(self.master_password, wrong_share)
+        result = vault_logic.open_vault_backup(self.username, self.master_password, wrong_share)
         self.assertIsNone(result)
 
     def test_open_backup_wrong_index_returns_none(self):
         """Recovery share dengan index salah harus mengembalikan None."""
         wrong_share = {"index": 999, "value": self.recovery_share["value"]}
-        result = vault_logic.open_vault_backup(self.master_password, wrong_share)
+        result = vault_logic.open_vault_backup(self.username, self.master_password, wrong_share)
         self.assertIsNone(result)
 
     def test_backup_vault_empty_initially(self):
         """Backup vault kosong saat pertama kali dibuat."""
-        vault = vault_logic.open_vault_backup(self.master_password, self.recovery_share)
+        vault = vault_logic.open_vault_backup(self.username, self.master_password, self.recovery_share)
         self.assertEqual(vault, [])
 
 
@@ -294,7 +300,7 @@ class TestVaultCRUD(unittest.TestCase):
         self.master_password = "CRUDPass789!"
         self.username        = "cruduser"
         vault_logic.create_vault(self.username, self.master_password)
-        self.vault = vault_logic.open_vault_normal(self.master_password)
+        self.vault = vault_logic.open_vault_normal(self.username, self.master_password)
 
     def tearDown(self):
         self.patcher_reg.stop()
@@ -307,6 +313,7 @@ class TestVaultCRUD(unittest.TestCase):
     def test_add_entry_returns_updated_vault(self):
         """add_entry mengembalikan vault yang diperbarui."""
         new_vault = vault_logic.add_entry(
+            self.username,
             self.vault, self.master_password,
             "GitHub", "user@test.com", "p@ssw0rd", "akun utama"
         )
@@ -316,6 +323,7 @@ class TestVaultCRUD(unittest.TestCase):
     def test_add_entry_content_correct(self):
         """Entry yang ditambahkan memiliki data yang benar."""
         new_vault = vault_logic.add_entry(
+            self.username,
             self.vault, self.master_password,
             "GitLab", "dev@test.com", "s3cur3!", "akun dev"
         )
@@ -328,15 +336,16 @@ class TestVaultCRUD(unittest.TestCase):
     def test_add_multiple_entries(self):
         """Menambahkan beberapa entry ke vault."""
         vault = self.vault
-        vault = vault_logic.add_entry(vault, self.master_password, "A", "a@a.com", "pa", "")
-        vault = vault_logic.add_entry(vault, self.master_password, "B", "b@b.com", "pb", "")
-        vault = vault_logic.add_entry(vault, self.master_password, "C", "c@c.com", "pc", "")
+        vault = vault_logic.add_entry(self.username, vault, self.master_password, "A", "a@a.com", "pa", "")
+        vault = vault_logic.add_entry(self.username, vault, self.master_password, "B", "b@b.com", "pb", "")
+        vault = vault_logic.add_entry(self.username, vault, self.master_password, "C", "c@c.com", "pc", "")
         self.assertEqual(len(vault), 3)
 
     def test_add_entry_vault_persisted_to_server(self):
         """Setelah add_entry, vault baru tersimpan di server (nonce berubah)."""
         old_nonce = self.server_db.get(self.username, {}).get("vault_nonce")
         vault_logic.add_entry(
+            self.username,
             self.vault, self.master_password,
             "Gmail", "mail@gmail.com", "gmailpass", ""
         )
@@ -347,11 +356,12 @@ class TestVaultCRUD(unittest.TestCase):
     def test_add_entry_and_reopen_vault(self):
         """Entry yang ditambahkan tetap ada setelah vault dibuka ulang."""
         vault = vault_logic.add_entry(
+            self.username,
             self.vault, self.master_password,
             "Twitter", "user@tw.com", "twpass!", ""
         )
         # Buka vault kembali
-        reopened = vault_logic.open_vault_normal(self.master_password)
+        reopened = vault_logic.open_vault_normal(self.username, self.master_password)
         self.assertIsNotNone(reopened)
         self.assertEqual(len(reopened), 1)
         self.assertEqual(reopened[0]["nama_layanan"], "Twitter")
@@ -361,10 +371,12 @@ class TestVaultCRUD(unittest.TestCase):
     def test_edit_entry_updates_field(self):
         """edit_entry mengubah field yang ditentukan."""
         vault = vault_logic.add_entry(
+            self.username,
             self.vault, self.master_password,
             "Netflix", "user@ntf.com", "oldpass", ""
         )
         edited = vault_logic.edit_entry(
+            self.username,
             vault, self.master_password, 0,
             password="newpass123"
         )
@@ -377,10 +389,12 @@ class TestVaultCRUD(unittest.TestCase):
     def test_edit_entry_all_fields(self):
         """edit_entry bisa mengubah semua field sekaligus."""
         vault = vault_logic.add_entry(
+            self.username,
             self.vault, self.master_password,
             "OldService", "old@u.com", "oldpw", "old note"
         )
         edited = vault_logic.edit_entry(
+            self.username,
             vault, self.master_password, 0,
             nama_layanan="NewService",
             username="new@u.com",
@@ -396,6 +410,7 @@ class TestVaultCRUD(unittest.TestCase):
     def test_edit_invalid_index_returns_none(self):
         """edit_entry dengan index di luar range harus mengembalikan None."""
         result = vault_logic.edit_entry(
+            self.username,
             self.vault, self.master_password, 99,
             password="newpass"
         )
@@ -404,13 +419,15 @@ class TestVaultCRUD(unittest.TestCase):
     def test_edit_and_reopen_vault(self):
         """Perubahan dari edit_entry tetap ada setelah vault dibuka ulang."""
         vault = vault_logic.add_entry(
+            self.username,
             self.vault, self.master_password,
             "Spotify", "sp@test.com", "oldsppass", ""
         )
         vault_logic.edit_entry(
+            self.username,
             vault, self.master_password, 0, password="newsppass"
         )
-        reopened = vault_logic.open_vault_normal(self.master_password)
+        reopened = vault_logic.open_vault_normal(self.username, self.master_password)
         self.assertEqual(reopened[0]["password"], "newsppass")
 
     # ── Delete ───────────────────────────────────────────────
@@ -418,22 +435,23 @@ class TestVaultCRUD(unittest.TestCase):
     def test_delete_entry_removes_item(self):
         """delete_entry menghapus entry dari vault."""
         vault = vault_logic.add_entry(
+            self.username,
             self.vault, self.master_password,
             "ToDelete", "del@t.com", "delpw", ""
         )
         self.assertEqual(len(vault), 1)
-        new_vault = vault_logic.delete_entry(vault, self.master_password, 0)
+        new_vault = vault_logic.delete_entry(self.username, vault, self.master_password, 0)
         self.assertIsNotNone(new_vault)
         self.assertEqual(len(new_vault), 0)
 
     def test_delete_correct_entry_from_multiple(self):
         """delete_entry menghapus entry yang tepat ketika ada beberapa."""
         vault = self.vault
-        vault = vault_logic.add_entry(vault, self.master_password, "A", "a@a.com", "pa", "")
-        vault = vault_logic.add_entry(vault, self.master_password, "B", "b@b.com", "pb", "")
-        vault = vault_logic.add_entry(vault, self.master_password, "C", "c@c.com", "pc", "")
+        vault = vault_logic.add_entry(self.username, vault, self.master_password, "A", "a@a.com", "pa", "")
+        vault = vault_logic.add_entry(self.username, vault, self.master_password, "B", "b@b.com", "pb", "")
+        vault = vault_logic.add_entry(self.username, vault, self.master_password, "C", "c@c.com", "pc", "")
         # Hapus entry index 1 (B)
-        new_vault = vault_logic.delete_entry(vault, self.master_password, 1)
+        new_vault = vault_logic.delete_entry(self.username, vault, self.master_password, 1)
         self.assertEqual(len(new_vault), 2)
         names = [e["nama_layanan"] for e in new_vault]
         self.assertNotIn("B", names)
@@ -442,17 +460,18 @@ class TestVaultCRUD(unittest.TestCase):
 
     def test_delete_invalid_index_returns_none(self):
         """delete_entry dengan index tidak valid mengembalikan None."""
-        result = vault_logic.delete_entry(self.vault, self.master_password, 99)
+        result = vault_logic.delete_entry(self.username, self.vault, self.master_password, 99)
         self.assertIsNone(result)
 
     def test_delete_and_reopen_vault(self):
         """Entry yang dihapus tidak muncul setelah vault dibuka ulang."""
         vault = vault_logic.add_entry(
+            self.username,
             self.vault, self.master_password,
             "Deleted", "del@test.com", "delpw", ""
         )
-        vault_logic.delete_entry(vault, self.master_password, 0)
-        reopened = vault_logic.open_vault_normal(self.master_password)
+        vault_logic.delete_entry(self.username, vault, self.master_password, 0)
+        reopened = vault_logic.open_vault_normal(self.username, self.master_password)
         self.assertEqual(reopened, [])
 
 
@@ -502,11 +521,11 @@ class TestVaultSecurity(unittest.TestCase):
         local share terenkripsi yang berbeda (karena kunci KDF berbeda).
         """
         vault_logic.create_vault("diffuser1", "PassA111!")
-        local_data1 = storage.load_local_share()
+        local_data1 = storage.load_local_share("diffuser1")
         _clear()
 
         vault_logic.create_vault("diffuser2", "PassB222!")
-        local_data2 = storage.load_local_share()
+        local_data2 = storage.load_local_share("diffuser2")
 
         self.assertNotEqual(local_data1[0], local_data2[0],
                             "Local share terenkripsi seharusnya berbeda untuk password berbeda")
@@ -516,8 +535,8 @@ class TestVaultSecurity(unittest.TestCase):
         vault_logic.create_vault("nonceuser", "NoncePass!")
         nonce1 = self.server_db["nonceuser"]["vault_nonce"]
 
-        vault = vault_logic.open_vault_normal("NoncePass!")
-        vault_logic.add_entry(vault, "NoncePass!", "Srv", "u@u.com", "pw", "")
+        vault = vault_logic.open_vault_normal("nonceuser", "NoncePass!")
+        vault_logic.add_entry("nonceuser", vault, "NoncePass!", "Srv", "u@u.com", "pw", "")
         nonce2 = self.server_db["nonceuser"]["vault_nonce"]
 
         self.assertNotEqual(nonce1, nonce2,
@@ -533,7 +552,7 @@ class TestVaultSecurity(unittest.TestCase):
         self.server_db["tamperuser"]["vault_blob"] = bytes(tampered)
 
         # Dekripsi harus gagal
-        result = vault_logic.open_vault_normal("TamperPass!")
+        result = vault_logic.open_vault_normal("tamperuser", "TamperPass!")
         self.assertIsNone(result,
                           "Vault yang dimodifikasi seharusnya gagal didekripsi")
 

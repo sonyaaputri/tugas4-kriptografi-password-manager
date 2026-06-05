@@ -49,15 +49,20 @@ Di terminal lain, jalankan client CLI:
 .venv\Scripts\python.exe client\main.py
 ```
 
-Tampilan CLI akan membuka menu utama:
+Tampilan CLI akan membuka welcome screen dan menu awal:
 
 ```text
-+------------------------------------------------------------------+
-|  SSS VAULT                                                       |
-|  Distributed Password Manager CLI                                |
-|  AES-128-GCM vault | Shamir (2,3) | Zero-knowledge server         |
-+------------------------------------------------------------------+
+WELCOME
+  [1] Masuk ke vault
+  [2] Buat vault baru
+  [3] Alat bantu
+  [0] Keluar
 ```
+
+Alur "Buat vault baru" berperan seperti signup. Alur "Masuk ke vault"
+berperan seperti login lokal: pengguna memasukkan username dan master
+password, lalu client membuka local share milik username tersebut.
+Master password tidak dikirim ke server.
 
 ## Konfigurasi
 
@@ -72,7 +77,11 @@ Client memakai endpoint server pada [client/api_client.py](client/api_client.py)
 
 ## Struktur Penyimpanan
 
-Data lokal klien disimpan di `client/local_data.json`:
+Data lokal klien disimpan per username di `client/local_users/`:
+
+- contoh path: `client/local_users/<username-terenkode>.json`
+- satu client dapat menyimpan beberapa vault lokal
+- saat program dijalankan ulang, tidak ada vault yang otomatis terbuka
 
 - username
 - local share terenkripsi
@@ -90,6 +99,11 @@ Data server disimpan di SQLite:
 - metadata timestamp
 
 Server tidak menyimpan master key, local share, recovery share, plaintext vault, password plaintext, atau kunci turunan KDF.
+
+Artefak bonus visual secret sharing disimpan secara default di:
+
+- `client/recovery_artifacts/<username>/` jika dibuat dari sesi vault
+- `client/recovery_artifacts/manual/` jika dibuat dari menu alat bantu awal
 
 ## Pengujian
 

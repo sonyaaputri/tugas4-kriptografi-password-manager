@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import getpass
 import os
+import sys
 from typing import Callable
 
 import api_client as api
@@ -11,13 +12,30 @@ from crypto.csprng import generate_password
 from crypto.sss import share_to_string, string_to_share
 
 
-BANNER = r"""
-+------------------------------------------------------------------+
-|  SSS VAULT                                                       |
-|  Distributed Password Manager CLI                                |
-|  AES-128-GCM vault | Shamir (2,3) | Zero-knowledge server         |
-+------------------------------------------------------------------+
-"""
+BOX_WIDTH = 66
+
+BANNER_LINES = [
+    "",
+    "███████╗ ███████╗ ███████╗",
+    "██╔════╝ ██╔════╝ ██╔════╝",
+    "███████╗ ███████╗ ███████╗",
+    "╚════██║ ╚════██║ ╚════██║",
+    "███████║ ███████║ ███████║",
+    "╚══════╝ ╚══════╝ ╚══════╝",
+    "",
+    "S H A M I R   V A U L T",
+    "",
+    "W E L C O M E   T O   S S S   V A U L T",
+    "Distributed Password Manager CLI",
+    "AES-128-GCM | Shamir (2,3)",
+    "Zero-knowledge server storage",
+    "",
+]
+
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+except Exception:
+    pass
 
 
 ACTION_LABELS = {
@@ -27,7 +45,7 @@ ACTION_LABELS = {
     "add": "Tambah password",
     "edit": "Ubah password",
     "delete": "Hapus password",
-    "generate": "Generate password CSPRNG",
+    "tools": "Alat bantu",
     "logout": "Keluar dari vault",
 }
 
@@ -37,7 +55,7 @@ def available_vault_actions(mode: str) -> list[str]:
     actions = ["list", "search", "detail"]
     if mode == "normal":
         actions.extend(["add", "edit", "delete"])
-    actions.extend(["generate", "logout"])
+    actions.extend(["tools", "logout"])
     return actions
 
 
@@ -52,37 +70,56 @@ class PasswordManagerCLI:
 
     def run(self) -> None:
         while True:
-            self._print_banner()
-            self._print(f"Local user : {storage.get_username() or '-'}")
-            self._print(f"Server     : {'online' if api.is_server_online() else 'offline'}")
+            self._print_welcome()
+            self._print(f"Server: {'online' if api.is_server_online() else 'offline'}")
             self._print("")
-            self._print("Menu utama")
-            self._print("  1. Buat vault baru")
-            self._print("  2. Buka vault mode normal")
-            self._print("  3. Buka vault mode backup")
-            self._print("  4. Generate password CSPRNG")
-            self._print("  5. Bonus: buat QR dan visual shares")
-            self._print("  6. Bonus: gabungkan visual shares")
-            self._print("  0. Keluar")
+            self._print_menu(
+                "MAIN MENU",
+                [
+                    ("1", "Masuk ke vault"),
+                    ("2", "Buat vault baru"),
+                    ("3", "Alat bantu"),
+                    ("0", "Keluar"),
+                ],
+            )
 
             choice = self._ask("Pilih menu")
             if choice == "1":
-                self._register_flow()
+                self._login_menu()
             elif choice == "2":
-                self._normal_login_flow()
+                self._register_flow()
+                self._pause()
             elif choice == "3":
-                self._backup_login_flow()
-            elif choice == "4":
-                self._generate_password_flow()
-            elif choice == "5":
-                self._visual_share_flow()
-            elif choice == "6":
-                self._combine_visual_share_flow()
+                self._tools_menu()
             elif choice == "0":
                 self._print("Sampai jumpa.")
                 return
             else:
                 self._warn("Pilihan tidak dikenal.")
+                self._pause()
+
+    def _login_menu(self) -> None:
+        while True:
+            self._print_menu(
+                "MASUK KE VAULT",
+                [
+                    ("1", "Mode normal"),
+                    ("2", "Mode backup"),
+                    ("0", "Kembali"),
+                ],
+            )
+            choice = self._ask("Pilih mode")
+            if choice == "1":
+                self._normal_login_flow()
+                self._pause()
+                return
+            if choice == "2":
+                self._backup_login_flow()
+                self._pause()
+                return
+            if choice == "0":
+                return
+            self._warn("Pilihan tidak dikenal.")
             self._pause()
 
     def _register_flow(self) -> None:
@@ -92,12 +129,12 @@ class PasswordManagerCLI:
             self._warn("Server tidak dapat diakses. Jalankan server sebelum membuat vault.")
             return
 
-        if storage.local_data_exists():
-            self._warn("Data lokal sudah ada. Membuat vault baru akan mengganti local share lokal.")
-            if not self._confirm("Lanjutkan"):
+        username = self._ask_nonempty("Username baru")
+        if storage.local_data_exists(username):
+            self._warn("Data lokal untuk username ini sudah ada.")
+            if not self._confirm("Tetap lanjutkan pembuatan vault baru"):
                 return
 
-        username = self._ask_nonempty("Username")
         master_password = self._ask_new_master_password()
         if master_password is None:
             return
@@ -110,65 +147,75 @@ class PasswordManagerCLI:
         recovery_text = share_to_string(recovery_share)
         self._ok("Vault berhasil dibuat.")
         self._print("")
-        self._print("Ringkasan kriptografi")
-        self._print("  [OK] Master key AES-128 berhasil dibangkitkan secara acak (16 bytes).")
-        self._print("  [OK] Vault kosong berhasil dienkripsi dengan AES-128-GCM.")
-        self._print("  [OK] Master key dibagi menjadi 3 share dengan SSS skema (2,3).")
+        self._print("Ringkasan kriptografi:")
+        self._print("  [OK] Master key AES-128 dibangkitkan acak (16 bytes).")
+        self._print("  [OK] Vault kosong dienkripsi dengan AES-128-GCM.")
+        self._print("  [OK] Master key dibagi dengan SSS skema (2,3).")
         self._print("  [OK] Local share disimpan terenkripsi di klien.")
-        self._print("  [OK] Server hanya menerima server share, vault terenkripsi, nonce, dan metadata.")
+        self._print("  [OK] Server hanya menyimpan server share, ciphertext, nonce, metadata.")
         self._print("")
         self._print("RECOVERY SHARE - SIMPAN SEKARANG")
-        self._print("+------------------------------------------------------------------+")
+        self._print("Salin persis satu baris di bawah ini:")
+        self._print("")
         self._print(recovery_text)
-        self._print("+------------------------------------------------------------------+")
-        self._print("Recovery share ini memuat koordinat share dan nilai share.")
+        self._print("")
+        self._print("Recovery share memuat koordinat share dan nilai share.")
+        self._print("Aplikasi tidak menyimpan recovery share ini.")
 
         if self._confirm("Buat QR dan visual shares untuk recovery share"):
             output_dir = self._ask(
                 "Folder output",
-                default=self._default_recovery_artifacts_dir(),
+                default=self._default_recovery_artifacts_dir(username),
             )
             self._create_visual_shares(recovery_text, output_dir)
 
         self._print("")
         if self._confirm("Masuk ke vault sekarang"):
-            self._vault_menu({
-                "mode": "normal",
-                "vault": [],
-                "master_password": master_password,
-            })
+            self._vault_menu(
+                {
+                    "username": username,
+                    "mode": "normal",
+                    "vault": [],
+                    "master_password": master_password,
+                }
+            )
 
     def _normal_login_flow(self) -> None:
         self._section("Mode Normal")
-        if not storage.local_data_exists():
-            self._warn("Data lokal belum ada. Buat vault terlebih dahulu.")
+        username = self._ask_nonempty("Username")
+
+        if not storage.local_data_exists(username):
+            self._warn("Data lokal untuk username ini belum ada. Buat vault terlebih dahulu.")
             return
         if not api.is_server_online():
-            self._warn("Server offline. Gunakan mode backup untuk akses darurat.")
+            self._warn("Server offline. Gunakan mode backup jika perlu.")
             return
 
-        username = storage.get_username() or "-"
-        self._print(f"Local user: {username}")
         master_password = getpass.getpass("Master password: ")
-        vault = vault_logic.open_vault_normal(master_password)
+        vault = vault_logic.open_vault_normal(username, master_password)
         if vault is None:
             self._warn("Akses ditolak. Password salah, server bermasalah, atau vault tidak valid.")
             return
 
         self._ok("Vault berhasil dibuka dengan local share + server share.")
-        self._vault_menu({
-            "mode": "normal",
-            "vault": vault,
-            "master_password": master_password,
-        })
+        self._vault_menu(
+            {
+                "username": username,
+                "mode": "normal",
+                "vault": vault,
+                "master_password": master_password,
+            }
+        )
 
     def _backup_login_flow(self) -> None:
         self._section("Mode Backup")
-        if not storage.local_data_exists():
-            self._warn("Data lokal belum ada.")
+        username = self._ask_nonempty("Username")
+
+        if not storage.local_data_exists(username):
+            self._warn("Data lokal untuk username ini belum ada.")
             return
-        if not storage.backup_exists():
-            self._warn("Backup vault lokal belum tersedia.")
+        if not storage.backup_exists(username):
+            self._warn("Backup vault lokal untuk username ini belum tersedia.")
             return
 
         self._print("Mode backup bersifat read-only.")
@@ -177,31 +224,33 @@ class PasswordManagerCLI:
         if recovery_share is None:
             return
 
-        vault = vault_logic.open_vault_backup(master_password, recovery_share)
+        vault = vault_logic.open_vault_backup(username, master_password, recovery_share)
         if vault is None:
             self._warn("Akses backup gagal. Password, recovery share, atau backup vault tidak valid.")
             return
 
         self._ok("Vault berhasil dibuka dengan local share + recovery share.")
-        self._vault_menu({
-            "mode": "backup",
-            "vault": vault,
-            "master_password": master_password,
-        })
+        self._vault_menu(
+            {
+                "username": username,
+                "mode": "backup",
+                "vault": vault,
+                "master_password": master_password,
+            }
+        )
 
     def _vault_menu(self, session: dict) -> None:
         mode = session["mode"]
+        username = session["username"]
         actions = available_vault_actions(mode)
 
         while True:
-            self._section(f"Vault Mode {mode.upper()}")
-            self._print(f"Isi vault: {len(session['vault'])} password")
-            if mode == "backup":
-                self._print("[READ-ONLY] Tambah, ubah, dan hapus dinonaktifkan.")
-            self._print("")
-
-            for number, action in enumerate(actions, start=1):
-                self._print(f"  {number}. {ACTION_LABELS[action]}")
+            self._print_vault_header(username, mode, len(session["vault"]))
+            menu_items = [
+                (str(number), ACTION_LABELS[action])
+                for number, action in enumerate(actions, start=1)
+            ]
+            self._print_menu("MENU VAULT", menu_items)
 
             choice = self._ask("Pilih aksi")
             try:
@@ -223,15 +272,47 @@ class PasswordManagerCLI:
                 self._edit_entry(session)
             elif action == "delete":
                 self._delete_entry(session)
-            elif action == "generate":
-                self._generate_password_flow()
+            elif action == "tools":
+                self._tools_menu(username)
+                continue
             elif action == "logout":
                 session["master_password"] = None
                 self._ok("Keluar dari vault.")
                 return
             self._pause()
 
-    def _list_entries(self, vault: list[dict], rows: list[tuple[int, dict]] | None = None) -> None:
+    def _tools_menu(self, username: str | None = None) -> None:
+        while True:
+            self._print_menu(
+                "ALAT BANTU",
+                [
+                    ("1", "Generate password CSPRNG"),
+                    ("2", "Buat QR dan visual shares"),
+                    ("3", "Gabungkan visual shares"),
+                    ("0", "Kembali"),
+                ],
+            )
+            choice = self._ask("Pilih alat")
+            if choice == "1":
+                self._generate_password_flow()
+                self._pause()
+            elif choice == "2":
+                self._visual_share_flow(username)
+                self._pause()
+            elif choice == "3":
+                self._combine_visual_share_flow()
+                self._pause()
+            elif choice == "0":
+                return
+            else:
+                self._warn("Pilihan tidak dikenal.")
+                self._pause()
+
+    def _list_entries(
+        self,
+        vault: list[dict],
+        rows: list[tuple[int, dict]] | None = None,
+    ) -> None:
         rows = rows if rows is not None else list(enumerate(vault))
         if not rows:
             self._print("Vault kosong.")
@@ -281,6 +362,7 @@ class PasswordManagerCLI:
         catatan = self._ask("Catatan", default="")
 
         new_vault = vault_logic.add_entry(
+            session["username"],
             session["vault"],
             session["master_password"],
             layanan,
@@ -317,6 +399,7 @@ class PasswordManagerCLI:
         catatan = self._ask("Catatan", default=old.get("catatan", ""))
 
         new_vault = vault_logic.edit_entry(
+            session["username"],
             session["vault"],
             session["master_password"],
             index,
@@ -343,6 +426,7 @@ class PasswordManagerCLI:
             return
 
         new_vault = vault_logic.delete_entry(
+            session["username"],
             session["vault"],
             session["master_password"],
             index,
@@ -387,8 +471,8 @@ class PasswordManagerCLI:
         self._print(password)
         return password if return_value else ""
 
-    def _visual_share_flow(self) -> None:
-        self._section("Bonus Visual Secret Sharing")
+    def _visual_share_flow(self, username: str | None = None) -> None:
+        self._section("Buat QR dan Visual Shares")
         recovery_share = self._ask_nonempty("Recovery share (SSS:index:value)")
         try:
             parsed = string_to_share(recovery_share)
@@ -399,7 +483,7 @@ class PasswordManagerCLI:
 
         output_dir = self._ask(
             "Folder output",
-            default=self._default_recovery_artifacts_dir(),
+            default=self._default_recovery_artifacts_dir(username),
         )
         self._create_visual_shares(recovery_share, output_dir)
 
@@ -437,10 +521,9 @@ class PasswordManagerCLI:
         except Exception as exc:
             self._warn(f"Fitur visual secret belum bisa dijalankan: {exc}")
 
-    def _default_recovery_artifacts_dir(self) -> str:
-        username = storage.get_username()
+    def _default_recovery_artifacts_dir(self, username: str | None = None) -> str:
         base_dir = os.path.join("client", "recovery_artifacts")
-        return os.path.join(base_dir, username) if username else base_dir
+        return os.path.join(base_dir, username) if username else os.path.join(base_dir, "manual")
 
     def _read_recovery_share(self) -> dict | None:
         self._print("Masukkan recovery share dalam format SSS:3:<hex>.")
@@ -504,14 +587,57 @@ class PasswordManagerCLI:
             return None
         return index
 
-    def _print_banner(self) -> None:
-        self._print(BANNER)
+    def _print_welcome(self) -> None:
+        self._print_box(None, BANNER_LINES)
+        self._print("Status: belum ada vault yang sedang dibuka.")
+        self._print("")
+
+    def _print_vault_header(self, username: str, mode: str, count: int) -> None:
+        mode_text = "BACKUP (READ-ONLY)" if mode == "backup" else "NORMAL"
+        lines = [
+            f"Vault : {username}",
+            f"Mode  : {mode_text}",
+            f"Isi   : {count} password",
+        ]
+        if mode == "backup":
+            lines.append("Tambah, ubah, dan hapus dinonaktifkan.")
+        self._print_box("VAULT TERBUKA", lines)
 
     def _section(self, title: str) -> None:
         self._print("")
-        self._print("=" * 66)
-        self._print(title.upper())
-        self._print("=" * 66)
+        self._print("╔" + "═" * BOX_WIDTH + "╗")
+        self._print("║" + title.upper().center(BOX_WIDTH) + "║")
+        self._print("╚" + "═" * BOX_WIDTH + "╝")
+
+    def _print_menu(
+        self,
+        title: str,
+        items: list[tuple[str, str]],
+        footer: str | None = None,
+    ) -> None:
+        width = BOX_WIDTH
+        self._print("╔" + "═" * width + "╗")
+        self._print("║" + title.center(width) + "║")
+        self._print("╠" + "═" * width + "╣")
+        for key, label in items:
+            line = f"  [{key}] {label}"
+            self._print("║" + line.ljust(width) + "║")
+        if footer:
+            self._print("║" + " " * width + "║")
+            self._print("║" + footer.ljust(width) + "║")
+        self._print("╚" + "═" * width + "╝")
+
+    def _print_box(self, title: str | None, lines: list[str]) -> None:
+        width = BOX_WIDTH
+        self._print("╔" + "═" * width + "╗")
+        if title:
+            self._print("║" + title.center(width) + "║")
+            self._print("╠" + "═" * width + "╣")
+        for raw_line in lines:
+            for line in self._wrap(raw_line, width - 4):
+                content = line.center(width - 4) if title is None else line.ljust(width - 4)
+                self._print("║  " + content + "  ║")
+        self._print("╚" + "═" * width + "╝")
 
     def _ask(self, prompt: str, default: str | None = None) -> str:
         suffix = f" [{default}]" if default is not None else ""
@@ -549,3 +675,31 @@ class PasswordManagerCLI:
         if len(value) <= width:
             return value
         return value[: max(0, width - 3)] + "..."
+
+    @staticmethod
+    def _wrap(value: str, width: int) -> list[str]:
+        if len(value) <= width:
+            return [value]
+
+        words = value.split()
+        if not words:
+            return [""]
+
+        lines: list[str] = []
+        current = ""
+        for word in words:
+            if len(word) > width:
+                if current:
+                    lines.append(current)
+                    current = ""
+                lines.extend(word[i : i + width] for i in range(0, len(word), width))
+                continue
+            candidate = word if not current else f"{current} {word}"
+            if len(candidate) <= width:
+                current = candidate
+            else:
+                lines.append(current)
+                current = word
+        if current:
+            lines.append(current)
+        return lines

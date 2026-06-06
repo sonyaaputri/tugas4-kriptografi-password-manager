@@ -114,7 +114,11 @@ class TestRequirement01CreateVault(VaultRequirementTestCase):
         self.assertNotEqual(self.server_db["req_create"]["vault_blob"], b"[]")
         self.assertIn("vault_nonce", self.server_db["req_create"])
 
-
+        print(f"\n  [INFO] Local Share index   : {local_share['index']}")
+        print(f"  [INFO] Server Share index  : {server_share['index']}")
+        print(f"  [INFO] Recovery Share index: {recovery['index']}")
+        print(f"  [INFO] Vault blob terenkripsi: {len(self.server_db['req_create']['vault_blob'])} bytes")
+        print(f"  [INFO] Vault nonce ada     : {bool(self.server_db['req_create']['vault_nonce'])}")
 class TestRequirement02LocalShareProtection(VaultRequirementTestCase):
     def test_local_share_is_encrypted_and_password_protected(self):
         recovery = vault_logic.create_vault("req_local", "MasterPass123!")

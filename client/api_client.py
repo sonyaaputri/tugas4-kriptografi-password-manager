@@ -1,4 +1,3 @@
-# ============================================================
 # HTTP client untuk komunikasi klien ke server
 #
 # Bertanggung jawab untuk:
@@ -10,7 +9,6 @@
 # Catatan zero-knowledge:
 #   - Tidak pernah mengirim master key, local share, recovery share
 #   - Tidak pernah mengirim plaintext vault atau password plaintext
-# ============================================================
 
 import base64
 import requests
@@ -23,7 +21,7 @@ SERVER_URL = "http://127.0.0.1:5000"
 REQUEST_TIMEOUT = 5
 
 
-# ── Helper Internal ──────────────────────────────────────────
+# Helper Internal
 
 def _is_server_response_ok(response: requests.Response) -> bool:
     """Cek apakah response server menandakan sukses."""
@@ -33,7 +31,7 @@ def _is_server_response_ok(response: requests.Response) -> bool:
         return False
 
 
-# ── Health Check ─────────────────────────────────────────────
+# Health Check
 
 def is_server_online() -> bool:
     """
@@ -54,7 +52,7 @@ def is_server_online() -> bool:
         return False
 
 
-# ── Register ─────────────────────────────────────────────────
+# Register 
 
 def register_user(
     username: str,
@@ -115,7 +113,7 @@ def register_user(
         return False, f"Error tidak terduga: {e}"
 
 
-# ── Ambil Data Server (Mode Normal) ──────────────────────────
+# Ambil Data Server (Mode Normal)
 
 def fetch_server_data(username: str) -> tuple[bool, dict]:
     """
@@ -173,7 +171,7 @@ def fetch_server_data(username: str) -> tuple[bool, dict]:
         return False, {}
 
 
-# ── Update Vault (Mode Normal) ────────────────────────────────
+# Update Vault (Mode Normal)
 
 def push_vault(
     username: str,

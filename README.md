@@ -12,7 +12,19 @@ Implementasi tugas 4 II4021 Kriptografi: password manager terdistribusi berbasis
 - `requests` untuk komunikasi client-server
 - `qrcode` dan `Pillow` untuk bonus visual secret sharing
 
-## Fitur
+## Dependensi
+
+Seluruh dependensi Python dicantumkan pada [requirements.txt](requirements.txt).
+Dependensi utama:
+
+- `Flask`
+- `cryptography`
+- `argon2-cffi`
+- `requests`
+- `qrcode`
+- `Pillow`
+
+## Fitur Utama
 
 - Vault dienkripsi sebagai satu kesatuan menggunakan AES-128-GCM.
 - Master key 16 byte dibagi menjadi 3 share dengan Shamir Secret Sharing skema (2,3):
@@ -22,6 +34,7 @@ Implementasi tugas 4 II4021 Kriptografi: password manager terdistribusi berbasis
 - Mode normal: local share + server share.
 - Mode backup: local share + recovery share, read-only.
 - CRUD password hanya di mode normal.
+- Data lokal klien disimpan per username sehingga satu client dapat menyimpan beberapa vault lokal.
 - Password generator memakai CSPRNG dari modul `secrets`.
 - Bonus: recovery share dapat diubah menjadi QR code lalu dibagi menjadi dua visual shares.
 
@@ -52,7 +65,7 @@ Di terminal lain, jalankan client CLI:
 Tampilan CLI akan membuka welcome screen dan menu awal:
 
 ```text
-WELCOME
+MAIN MENU
   [1] Masuk ke vault
   [2] Buat vault baru
   [3] Alat bantu
@@ -77,11 +90,10 @@ Client memakai endpoint server pada [client/api_client.py](client/api_client.py)
 
 ## Struktur Penyimpanan
 
-Data lokal klien disimpan per username di `client/local_users/`:
+Data lokal klien disimpan per username di `client/local_users/`. Contoh path:
+`client/local_users/<username-terenkode>.json`.
 
-- contoh path: `client/local_users/<username-terenkode>.json`
-- satu client dapat menyimpan beberapa vault lokal
-- saat program dijalankan ulang, tidak ada vault yang otomatis terbuka
+Data lokal memuat:
 
 - username
 - local share terenkripsi
@@ -113,9 +125,7 @@ Jalankan semua test:
 .venv\Scripts\python.exe -B -m unittest discover -s tests -p test_*.py -v
 ```
 
-Catatan penting: 9 pengujian pada instruksi tugas adalah 9 kategori/skenario minimum, bukan berarti wajib ada 9 file Python. Satu file test boleh memuat banyak skenario, dan satu skenario bisa diuji oleh beberapa test.
-
-File test saat ini:
+File test :
 
 - `test_aes_gcm.py`: AES-128-GCM vault dan AES-256-GCM local share.
 - `test_sss.py`: Shamir Secret Sharing dan format share.
@@ -124,9 +134,9 @@ File test saat ini:
 - `test_vault.py`: alur vault end-to-end dengan mock server.
 - `test_assignment_requirements.py`: pemetaan eksplisit 9 kategori pengujian dari PDF.
 
-Pemetaan 9 kategori dari instruksi:
+9 kategori pengujian program:
 
-| Kategori instruksi | Cakupan test |
+| Kategori pengujian | Cakupan test |
 | --- | --- |
 | 1. Uji pembuatan vault | `TestRequirement01CreateVault`, `TestCreateVault` |
 | 2. Uji perlindungan local share | `TestRequirement02LocalShareProtection`, `TestKDFIntegration` |
@@ -137,5 +147,3 @@ Pemetaan 9 kategori dari instruksi:
 | 7. Uji mode backup | `TestRequirement07BackupMode`, `TestOpenVaultBackup` |
 | 8. Uji kegagalan pemulihan | `TestRequirement08RecoveryFailures`, `TestVaultSecurity` |
 | 9. Uji kriptografi visual bonus | `TestRequirement09VisualCryptographyBonus` |
-
-Untuk laporan dan video demo, test otomatis dapat dijadikan bukti teknis. Namun beberapa poin "perlihatkan" tetap sebaiknya didemokan lewat CLI, misalnya recovery share yang tampil sekali, isi SQLite server, dan pemindaian QR hasil gabungan visual shares dengan kamera/QR scanner.

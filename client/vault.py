@@ -1,4 +1,3 @@
-# ============================================================
 # Manajemen vault: pembuatan, akses normal, akses backup,
 # dan operasi CRUD data password
 #
@@ -36,7 +35,6 @@
 #   2. Terima recovery share dari pengguna
 #   3. Rekonstruksi master key dari local share + recovery share
 #   4. Dekripsi backup vault lokal dengan master key
-# ============================================================
 
 import json
 import os
@@ -54,7 +52,7 @@ import local_storage as storage
 import api_client    as api
 
 
-# ── Konstanta ────────────────────────────────────────────────
+# Konstanta
 
 MASTER_KEY_SIZE = 16   # 128-bit untuk AES-128-GCM
 SSS_THRESHOLD   = 2    # minimal 2 share untuk rekonstruksi
@@ -66,7 +64,7 @@ SERVER_SHARE_INDEX   = 2
 RECOVERY_SHARE_INDEX = 3
 
 
-# ── Pembuatan Vault ───────────────────────────────────────────
+# Pembuatan Vault
 
 def create_vault(username: str, master_password: str) -> dict | None:
     """
@@ -165,7 +163,7 @@ def create_vault(username: str, master_password: str) -> dict | None:
     return recovery_share
 
 
-# ── Akses Normal ──────────────────────────────────────────────
+# Akses Normal
 
 def open_vault_normal(username: str, master_password: str) -> list[dict] | None:
     """
@@ -244,7 +242,7 @@ def open_vault_normal(username: str, master_password: str) -> list[dict] | None:
     return vault
 
 
-# ── Akses Backup ──────────────────────────────────────────────
+# Akses Backup
 
 def open_vault_backup(
     username: str,
@@ -330,7 +328,7 @@ def open_vault_backup(
     return vault
 
 
-# ── CRUD Data Password (Mode Normal) ─────────────────────────
+# CRUD Data Password (Mode Normal)
 
 def _save_vault(
     username: str,

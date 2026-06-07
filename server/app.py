@@ -1,4 +1,3 @@
-# ============================================================
 # Flask server untuk Password Manager Terdistribusi
 #
 # Prinsip zero-knowledge:
@@ -6,7 +5,6 @@
 #   - Server tidak pernah menerima/menyimpan master key, local share,
 #     recovery share, plaintext vault, password plaintext, kunci KDF
 #   - Server tidak melakukan enkripsi/dekripsi apapun
-# ============================================================
 
 from flask import Flask, request, jsonify
 import database as db
@@ -16,7 +14,7 @@ import base64
 app = Flask(__name__)
 
 
-# ── Helper ───────────────────────────────────────────────────
+# Helper
 
 def error(message: str, code: int):
     """Helper untuk mengembalikan response error."""
@@ -31,7 +29,7 @@ def ok(data: dict = None, message: str = "OK"):
     return jsonify(payload), 200
 
 
-# ── Endpoint: Register ────────────────────────────────────────
+# Endpoint: Register
 
 @app.route("/register", methods=["POST"])
 def register():
@@ -76,7 +74,7 @@ def register():
     return _jsonify({"success": True, "message": f"Pengguna '{username}' berhasil didaftarkan"}), 201
 
 
-# ── Endpoint: Get Server Data (Mode Normal) ───────────────────
+# Endpoint: Get Server Data (Mode Normal)
 
 @app.route("/vault/<username>", methods=["GET"])
 def get_vault(username: str):
@@ -111,7 +109,7 @@ def get_vault(username: str):
     })
 
 
-# ── Endpoint: Update Vault (Mode Normal) ─────────────────────
+# Endpoint: Update Vault (Mode Normal)
 
 @app.route("/vault/<username>", methods=["PUT"])
 def update_vault(username: str):
@@ -164,7 +162,7 @@ def ping():
     return ok(message="pong")
 
 
-# ── Entry Point ───────────────────────────────────────────────
+# Entry Point
 
 if __name__ == "__main__":
     db.init_db()

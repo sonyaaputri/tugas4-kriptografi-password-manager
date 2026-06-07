@@ -1,4 +1,3 @@
-# ============================================================
 # Manajemen penyimpanan data lokal di sisi klien.
 #
 # Setiap username memiliki file lokal sendiri:
@@ -11,7 +10,6 @@
 #   - username sebagai metadata
 #
 # Recovery share tidak disimpan oleh aplikasi.
-# ============================================================
 
 from __future__ import annotations
 

@@ -147,3 +147,33 @@ File test :
 | 7. Uji mode backup | `TestRequirement07BackupMode`, `TestOpenVaultBackup` |
 | 8. Uji kegagalan pemulihan | `TestRequirement08RecoveryFailures`, `TestVaultSecurity` |
 | 9. Uji kriptografi visual bonus | `TestRequirement09VisualCryptographyBonus` |
+
+## Credits
+
+Project ini dibuat untuk memenuhi Tugas 4 II4021 Kriptografi.
+
+<table>
+  <tr>
+    <td align="center">
+      <a href="https://github.com/snachkzs">
+        <img src="https://github.com/snachkzs.png" width="80" style="border-radius: 50%"><br/>
+        <strong>Alma Felicia Vielrizki</strong><br/>
+        18223112
+      </a>
+    </td>
+    <td align="center">
+      <a href="https://github.com/sonyaaputri">
+        <img src="https://github.com/sonyaaputri.png" width="80" style="border-radius: 50%"><br/>
+        <strong>Sonya Putri Fadilah</strong><br/>
+        18223138
+      </a>
+    </td>
+    <td align="center">
+      <a href="https://github.com/auliaazkaazzahra">
+        <img src="https://github.com/auliaazkaazzahra.png" width="80" style="border-radius: 50%"><br/>
+        <strong>Aulia Azka Azzahra</strong><br/>
+        18223131
+      </a>
+    </td>  
+  </tr>
+</table>
